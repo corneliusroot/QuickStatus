@@ -22,5 +22,5 @@ Put it in your .bash_profile to get a status every time you log in.
 - Announces system hostname and uptime
 
 Known Issues:
-Logic for port 80 usage could be better, and using 'lsof' to check for services takes a long time on busy systems. 
-
+- Logic for port 80 usage could be better, and using 'lsof' to check for services takes a long time on busy systems. 
+- File Systems report width gets screwy with the long line lengths used by Logical Volumes. 
