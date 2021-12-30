@@ -2,6 +2,9 @@
 A shell script to alert to any immediate problems upon login.
 It is intended to be installed in /usr/local/bin/quickstatus.sh
 Put it in your .bash_profile to get a status every time you log in.
+Use "/usr/local/bin/quickstatus.sh -q" for headless mode
+Install as a cron job for basic system monitoring that will send a ntfy.sh push if there are any anomalies.
+Run "quickstatus.sh 0 test" (the first argument can by anything, or -q) to test notifications
 
 - Check disk status
  - Free Space (OK, Warning, Critical, each in Green, Yellow, Red)
