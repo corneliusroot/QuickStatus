@@ -71,6 +71,7 @@ okload=2.99 #load is okay if it's lower than this
 warnload=2.99 #load is warning if higher than this but lower than highload
 highload=4 #load is considered to be too high after this point
 
+
 cpu15mload=$(top -b -n1 | head -1 | awk '{ print $NF }')
 if (( $(echo "$cpu15mload $okload" | awk '{print ($1 < $2)}') ));
         then
@@ -84,6 +85,8 @@ if (( $(echo "$cpu15mload $okload" | awk '{print ($1 < $2)}') ));
                         then
                         cpuload="${red}${cpu15mload}${NC}"
                         alert="$alert CPU15-$cpu15mload"
+						else
+		                if (( $(echo "$cpu15mload $warnload" | awk '{print ($1 > $2)}') ));				
                                 then
                                         cpuload="${yel}${cpuload}${NC}"
                                 else true
