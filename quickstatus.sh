@@ -84,7 +84,6 @@ if (( $(echo "$cpu15mload $okload" | awk '{print ($1 < $2)}') ));
                         then
                         cpuload="${red}${cpu15mload}${NC}"
                         alert="$alert CPU15-$cpu15mload"
-                        else
                                 then
                                         cpuload="${yel}${cpuload}${NC}"
                                 else true
