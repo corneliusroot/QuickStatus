@@ -1,45 +1,116 @@
-#!/bin/sh
+#!/bin/bash
 #-------------------------------------------------------
-#Quick Diag v.2
-#Created by Ryan Flowers for ASO 9/30/2014
-#Please report all bugs to ryan.flowers@asmallorange.com
-#Please include server details and account details so
-#that I can reproduce the problem.
+#Quick Diag v3
 #
 #
-#Usage: sh quickdiag.sh
-# 05/26/21 Added dovecot on port 110 and Postfix on 25
+#Usage: bash quickdiag 
+# -q for quiet mode
+# make the second argument "test" to test alerts
+# e.g. "quickdiag 1 test"
+# for cron jobs use
+#    */10 * * * * /usr/local/bin/quickdiag -q
+# add to .bash_profile to get a quick status when you log in
 #-------------------------------------------------------
+# V3 Changelog 12-29-21
+# Added 
+#  - Notification via ntfy.sh
+#  - Add headless run for crons (-q)
+#  - Add CPU load monitoring 
+# Bugfixes 
+#  - changed lsof based checks to look for LISTEN rather than service name to resolve false alarms
+# 
+# TODO
+# Add restart capabilities
 
+#### CONFIGURATION
+#Set LSOF to your local environment
+lsof="/usr/sbin/lsof"
+ntfysub="Your_ntfy.sh_subscription_name"
 
-
-# Getting all colorful for this one
+# Set colors for red/grn/yel text
 red='\e[0;31m'
 grn='\e[0;32m'
 yel='\e[0;93m'
 NC='\e[0m' # No Color
 
+#Force alerts by setting to any value
+if [ "$2" == "test" ]
+        then
+                teststatus="1"
+        else
+                teststatus="0"
+fi
+
+#define a notification method
+function notifycmd {
+curl --silent -d "$(hostname) $alert" ntfy.sh/$ntfysub >/dev/null
+}
+
+#configure verbose and quite modes
+if [ "$1" = "-q" ]
+        then
+                verbose="true" 
+                printfverbose="true" 
+        else
+                verbose="echo -e"
+                printfverbose="printf"
+fi
+
+
+#Set the alert message to none
+alert=""
+
 #Get uptime and reformat it to something easy to read
 uptime=$(uptime -p | sed 's/^up //')
 
+#check the 15 minute CPU load
+#configured for a 2 core VPS. Adjust values as needed
+check15m (){
+cpu15mload=$(top -b -n1 | head -1 | awk '{ print $NF }')
+#if CPU load is less than 2.99, display as green and do not notify.
+if [ $(echo $cpu15mload <  $(echo 2.99) | bc -l) ]
+        then
+                cpuload="${grn}${cpu15mload}${NC}"
+                        if [ $teststatus == 1 ]
+                        then
+                        alert="$alert CPU15-$cpu15mload"
+                        fi
+        else
+                #If CPU load is over 4, notify and display in red
+                if [ $(echo $cpu15mload  > "4" bc -l) ]
+                        then
+                        cpuload="${red}${cpu15mload}${NC}"
+                        alert="$alert CPU15-$cpu15mload"
+                        else
+                        #if cpu avg is higher than 3 but less than 4, send a warning notification, display in yellow
+                        if [ $(echo $cpu15mload > "2.99"| bc -l) ]
+
+                                then
+                                        cpuload="${yel}${cpuload}${NC}"
+                                        alert="$alert CPUWARN-$cpu15mload"
+                                else true
+                        fi
+                fi
+fi
+}
+
+
 ###### File System Check function
 checkfs (){
-#filesystems=`df -P | grep ^/ |sed -e '/^none/d' -e '/^Filesystem/d' -e 's#^/#@,/#g' | awk '{ print $1","$5","$6 }'`
+#get list of file systems
 filesystems=$(df -P | grep ^/ |sed -e '/^none/d' -e '/^Filesystem/d' -e 's#^/#@,/#g' | awk '{ print $1","$5","$6 }')
-#Define the name of the file we're going to use for a read-only check
-touchfile=".`date +%N`.qd"
-echo  "Partition        Use Mountpoint            Status       CAPACITY      INODES"
-#      /dev/vda1     55% /                  [Writeable] [  > 90%  ]
 
+#Define the name of the file we're going to use for a read-only check
+touchfile=".$(date +%N).qd"
+$verbose  "Partition        Use Mountpoint            Status       CAPACITY      INODES"
 
 #Loop for checking each file system for fullness and writeability
-for fs in `echo $filesystems| grep @`
+for fs in $(echo $filesystems| grep @)
 do
-partition=`echo $fs | cut -d, -f2`
-percentfull=`echo $fs | cut -d, -f3 | sed 's/%//'`
-mountpoint=`echo $fs | cut -d, -f4`
-#echo $partition $percentfull $mountpoint
-inodefull=`df -P -i | grep $partition| grep ^/ |sed -e '/^none/d' -e '/^Filesystem/d' -e 's#^/#@,/#g' | awk '{ print $5 }'| cut -d% -f1`
+partition=$(echo $fs | cut -d, -f2)
+percentfull=$(echo $fs | cut -d, -f3 | sed 's/%//')
+mountpoint=$(echo $fs | cut -d, -f4)
+inodefull=$(df -P -i | grep $partition| grep ^/ |sed -e '/^none/d' -e '/^Filesystem/d' -e 's#^/#@,/#g' | awk '{ print $5 }'| cut -d% -f1)
 
 touch $mountpoint/$touchfile >/dev/null 2>&1
 if [ -f $mountpoint/$touchfile ]
@@ -47,20 +118,30 @@ if [ -f $mountpoint/$touchfile ]
                 writeable=" Writeable "
                 rm -f $mountpoint/$touchfile
                 fsw=$grn
+                if [ $teststatus == 1 ]
+                        then
+                        alert="$alert $partition_RO"
+                fi
         else
                 writeable=" READ ONLY "
                 fsw=$red
+                alert="$alert $partition_RO"
 fi
 
 if test ${percentfull} -le 89
         then
                 capwarn="    OK    "
                 capco=$grn
+                                if [ $teststatus == 1 ]
+                                        then
+                                        alert="$alert $partition CRIT99"
+                                fi
         else
                 if test $percentfull -ge 99
                         then
                                 capwarn=" CRITICAL "
                                 capco=$red
+                                alert="$alert $parition CRIT99"
                         else
                         if test $percentfull -ge 90
                                 then
@@ -77,11 +158,16 @@ if test ${inodefull} -le 89
         then
                 inodewarn="    OK    "
                 inodeco=$grn
+                                if [ $teststatus == 1 ]
+                                        then
+                                        alert="$alert $partition INODE99"
+                                fi
         else
                 if test $inodefull -ge 99
                         then
                                 inodewarn=" CRITICAL "
                                 inodeco=$red
+                                                                alert="$alert $partition INODE99"
                         else
                         if test $inodefull -ge 90
                                 then
@@ -92,7 +178,7 @@ if test ${inodefull} -le 89
                 fi
 fi
 
-printf "%-15s ${capco}%3s%%${NC} %-18s [${fsw}%-10s${NC}] [${capco}%10s${NC}] [${inodeco}%10s${NC}]\n" "${partition}" "${percentfull}" "${mountpoint}" "${writeable}" "${capwarn}" "${inodewarn}"
+$printfverbose "%-15s ${capco}%3s%%${NC} %-18s [${fsw}%-10s${NC}] [${capco}%10s${NC}] [${inodeco}%10s${NC}]\n" "${partition}" "${percentfull}" "${mountpoint}" "${writeable}" "${capwarn}" "${inodewarn}"
 
 done
 }
@@ -103,95 +189,106 @@ done
 
 ########## BEGIN Web Services checking
 checkweb (){
-# Find out what web server is in use
-#port80=`lsof -P -i:80 | awk '{ print $1 }' | head -1`
-#port8080=`lsof -P -i:8080 | awk '{ print $1 }' | head -1`
-port80=`lsof -P -i:80 | awk '{ print $1 }' | sort | uniq -c | sort -n | tail -1 | awk '{ print $2 }'`
-port8080=`lsof -P -i:8080 | awk '{ print $1 }' | sort | uniq -c | sort -n | tail -1 | awk '{ print $2 }'`
-#echo $port80
-#echo $port8080
-
-#if 80 is dead, raise a red flag and stop checking
-if [ -z ${port80} ]
+# The same structure is used for all checks. Use LSOF to make sure the assigned port is listening. No further comments on this.
+port80=$($lsof -i:80 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\))
+if [  $port80 = "LISTEN" ]
         then
-                status80="${red}WEB SERVER OFFLINE${NC}"
-        else
-#but if it's alive, check to see if it's nginx or apache
-                if [[ ${port80} == httpd ]];
-                        then
                                 status80="${grn}Apache OK${NC}"
-                else
-                        if [[ ${port80} == nginx ]];
-                                then
-                                 status80="${grn}Nginx OK${NC}"
-#if it's nginx, make sure apache is on 8080.
-                                if [[ ${port8080} == httpd ]]
+                                if [ $teststatus == 1 ]
                                         then
-                                                status8080="${grn}Apache OK${NC}"
-                                        else
-                                                status8080="${red}Apache OFFLINE${NC}"
+                                        alert="$alert APACHE"
                                 fi
-                        fi
-                fi
-fi
-echo -e "Web Port 80:  "${status80}
-if [[ ${port8080} == httpd ]]
-        then
-                echo -e "Web Port 8080:"${status8080}
+        else
+                status80="${red}WEB SERVER OFFLINE${NC}"
+                                alert="$alert APACHE"
 fi
 }
 
 ##### Function: Postfix queue check
+#can be modified for Exim or other MTA's
 ebpc=$(mailq | tail -1 | awk '{ print $5 }')
 if [ -z $ebpc ]
         then
         cebpc="${grn}Empty${NC}"
+                                                                if [ $teststatus == 1 ]
+                                                                        then
+                                                                        alert="$alert MAILQ"
+                                                                fi
+
         else
                 if test ${ebpc} -le 1999
                         then
                                 cebpc="${grn}${ebpc}${NC}"
+                                                                if [ $teststatus == 1 ]
+                                                                        then
+                                                                        alert="$alert MAILQ"
+                                                                fi
                         else
                         cebpc="${red}${ebpc}${NC}"
+                                                alert="$alert MAILQ_$ebpc"
                 fi
 fi
 ##### End Function: Postfix queue check
-
-if [ "$(lsof -i:3306 | awk '{ print $1}' | tail -1)" == "mysqld" ]
+# SQL Server check
+if [ "$($lsof -i:3306 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\))" == "LISTEN" ]
         then
                 cmysql="${grn}MySQL OK${NC}"
+                                                                if [ $teststatus == 1 ]
+                                                                then
+                                                                alert="$alert SQL"
+                                                                fi
+
         else
                 cmysql="${red}MySQL DOWN${NC}"
+                                alert="$alert SQL"
 
 fi
 
-if [ "$(lsof -i:110 | awk '{ print $1}' | tail -1)" == "dovecot" ]
+#Dovecot check
+if [ "$($lsof -i:110 | awk '{ print $1}' | tail -1)" == "dovecot" ]
         then
                 cdovecot="${grn}Dovecot OK${NC}"
+                                                                if [ $teststatus == 1 ]
+                                                                then
+                                                                alert="$alert DOVECOT"
+                                                                fi
+
         else
                 cdovecot="${red}Dovecot DOWN${NC}"
+                                alert="$alert DOVECOT"
 
 fi
 
-if [ "$(lsof -i:25 | awk '{ print $1}' | tail -1)" == "smtpd" ]
+# Postfix status check
+if [ "$($lsof -i:25 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\))" == "LISTEN" ]
         then
                 cpostfix="${grn}Postfix OK${NC}"
+                                                                if [ $teststatus == 1 ]
+                                                                then
+                                                                alert="$alert POSTFIX"
+                                                                fi
+
         else
                 cpostfix="${red}Postfix DOWN${NC}"
-
+                                alert="$alert POSTFIX"
 fi
-
-
-echo "--------------------------------"
-echo "Hostname      "`hostname`
-echo "Uptime:       "${uptime}
+# Begin displaying output
+$verbose "--------------------------------"
+$verbose "Hostname      "$(hostname)
+$verbose "Uptime:       "${uptime}
+check15m
+$verbose "15m CPU Load: "${cpuload}
 checkweb
-echo -e "MySQL:        "${cmysql}
-echo -e "Postfix:      "${cpostfix}
-echo -e "Dovecot:      "${cdovecot}
-
-echo -e "Mail Queue:   "${cebpc}
-
-#echo "Disk Status:  "${}
-echo "--------------------------------"
-#checkfs |sed -e 's#/dev/mapper/#/#' -e 's/VolGroup/VG/' -e 's/LogVol/LV/'
+$verbose "MySQL:        "${cmysql}
+$verbose "Postfix:      "${cpostfix}
+$verbose "Dovecot:      "${cdovecot}
+$verbose "Mail Queue:   "${cebpc}
+$verbose "--------------------------------"
 checkfs
+
+# If there is an alert message, send it. Otherwise do nothing.
+if [ -n "$alert" ]
+then
+notifycmd
+#echo $alert
+fi
