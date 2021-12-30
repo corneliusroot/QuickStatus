@@ -6,6 +6,9 @@ Use "/usr/local/bin/quickstatus.sh -q" for headless mode
 Install as a cron job for basic system monitoring that will send a ntfy.sh push if there are any anomalies.
 Run "quickstatus.sh 0 test" (the first argument can by anything, or -q) to test notifications
 
+
+![This is an image](https://raw.githubusercontent.com/corneliusroot/QuickStatus/master/MobaXterm_2021-12-30_07-43-22.jpg)
+
 - Check disk status
  - Free Space (OK, Warning, Critical, each in Green, Yellow, Red)
  - Inode Usage (OK, Warning, Critical, each in Green, Yellow, Red)
@@ -25,6 +28,7 @@ Run "quickstatus.sh 0 test" (the first argument can by anything, or -q) to test 
 - Announces system hostname and uptime
 
 - Integration with ntfy.sh for push notifications to your smart phone
+- ntfy pushes are logged in /var/log/messages
 
 Known Issues:
 - File Systems report width gets screwy with the long line lengths used by Logical Volumes. 
