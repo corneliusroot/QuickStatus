@@ -66,9 +66,13 @@ uptime=$(uptime -p | sed 's/^up //')
 #check the 15 minute CPU load
 #configured for a 2 core VPS. Adjust values as needed
 check15m (){
+#configure load thresholds for your own server. 
+okload=2.99 #load is okay if it's lower than this
+warnload=2.99 #load is warning if higher than this but lower than highload
+highload=4 #load is considered to be too high after this point
+
 cpu15mload=$(top -b -n1 | head -1 | awk '{ print $NF }')
-#if CPU load is less than 2.99, display as green and do not notify.
-if [ $(echo $cpu15mload <  $(echo 2.99) | bc -l) ]
+if (( $(echo "$cpu15mload $okload" | awk '{print ($1 < $2)}') ));
         then
                 cpuload="${grn}${cpu15mload}${NC}"
                         if [ $teststatus == 1 ]
@@ -76,24 +80,18 @@ if [ $(echo $cpu15mload <  $(echo 2.99) | bc -l) ]
                         alert="$alert CPU15-$cpu15mload"
                         fi
         else
-                #If CPU load is over 4, notify and display in red
-                if [ $(echo $cpu15mload  > "4" bc -l) ]
+                if (( $(echo "$cpu15mload $highload" | awk '{print ($1 > $2)}') ));
                         then
                         cpuload="${red}${cpu15mload}${NC}"
                         alert="$alert CPU15-$cpu15mload"
                         else
-                        #if cpu avg is higher than 3 but less than 4, send a warning notification, display in yellow
-                        if [ $(echo $cpu15mload > "2.99"| bc -l) ]
-
                                 then
                                         cpuload="${yel}${cpuload}${NC}"
-                                        alert="$alert CPUWARN-$cpu15mload"
                                 else true
                         fi
                 fi
 fi
 }
-
 
 ###### File System Check function
 checkfs (){
