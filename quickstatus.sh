@@ -1,14 +1,14 @@
 #!/bin/bash
 #-------------------------------------------------------
-#Quick Diag v3
+#Quick Status v3
 #
 #
-#Usage: bash quickdiag 
+#Usage: bash quickstatus 
 # -q for quiet mode
 # make the second argument "test" to test alerts
-# e.g. "quickdiag 1 test"
+# e.g. "quickstatus 1 test"
 # for cron jobs use
-#    */10 * * * * /usr/local/bin/quickdiag -q
+#    */10 * * * * /usr/local/bin/quickstatus -q
 # add to .bash_profile to get a quick status when you log in
 #-------------------------------------------------------
 # V3 Changelog 12-29-21
