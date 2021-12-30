@@ -287,5 +287,5 @@ checkfs
 if [ -n "$alert" ]
 then
 notifycmd
-#echo $alert
+logger "quickstatus v3 notification sent: $alert"
 fi
