@@ -7,7 +7,7 @@ Install as a cron job for basic system monitoring that will send a ntfy.sh push 
 Run "quickstatus.sh 0 test" (the first argument can by anything, or -q) to test notifications
 
 
-![This is an image](https://raw.githubusercontent.com/corneliusroot/QuickStatus/master/MobaXterm_2021-12-30_07-43-22.jpg)
+![This is an image](https://raw.githubusercontent.com/corneliusroot/QuickStatus/master/qsscreenshot.jpg)
 
 - Check disk status
  - Free Space (OK, Warning, Critical, each in Green, Yellow, Red)
