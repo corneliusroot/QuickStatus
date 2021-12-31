@@ -20,6 +20,7 @@
 #  - changed lsof based checks to look for LISTEN rather than service name to resolve false alarms
 # 
 # TODO
+# re-test failures to reduce false positives
 # Add restart capabilities
 
 #### CONFIGURATION
@@ -279,6 +280,7 @@ $verbose "Uptime:       "${uptime}
 check15m
 $verbose "15m CPU Load: "${cpuload}
 checkweb
+$verbose "Web Server:   "${status80}
 $verbose "MySQL:        "${cmysql}
 $verbose "Postfix:      "${cpostfix}
 $verbose "Dovecot:      "${cdovecot}
