@@ -6,6 +6,14 @@ Use "/usr/local/bin/quickstatus.sh -q" for headless mode
 Install as a cron job for basic system monitoring that will send a ntfy.sh push if there are any anomalies.
 Run "quickstatus.sh 0 test" (the first argument can by anything, or -q) to test notifications
 
+Quickstatus can be configured to retry on failures with a third argument. Running 
+
+quickstatus -q 0 3
+
+will cause quickstatus to run in headless mode (-q), 0 for production rather than testing, and 3 for three retries. 
+If a service is found to be down, it will rerun in 5 seconds with one less retry until either all services are up
+or else the retries are exhausted. The exception is CPU load: If there is a CPU alert, it is sent immediately 
+without doing any retries.
 
 ![This is an image](https://raw.githubusercontent.com/corneliusroot/QuickStatus/master/qsscreenshot.jpg)
 
