@@ -1,32 +1,86 @@
 #!/bin/bash
 #-------------------------------------------------------
-#Quick Status v3
+#Quick Status v3.1
 #
 #
-#Usage: bash quickstatus 
+# Usage:
+#
+# quickstatus -q test 4
+#
 # -q for quiet mode
-# make the second argument "test" to test alerts
-# e.g. "quickstatus 1 test"
-# for cron jobs use
-#    */10 * * * * /usr/local/bin/quickstatus -q
-# add to .bash_profile to get a quick status when you log in
+# test to generate an alert
+# 4 = number of retries in addition to first check before
+#     sending an alert. Overridden by "test" argument.
+#
+# To skip testing but get the retries, make the second
+# argument zero
+#
+# e.g. "quickstatus 1 0 3"
+
+# will use no testing, but give 3 retries fora total of
+# four checks. CPU alerts are sent immediately regardless
+# of specified retries.
+#
+# For cron jobs use a zero for the second argument.
+#
+#    */10 * * * * /usr/local/bin/quickstatus -q 1 0 2
+#
+# add to .bash_profile with no arguments to get a quick status when you log in
+#
 #-------------------------------------------------------
-# V3 Changelog 12-29-21
-# Added 
+#
+# V3.1 Changelog 1-2-22
+# Added
+#  - Retry Capabilties to cut down on false positives, specifically
+#    Dovecot which sometimes doesn't answer LSOF on the first try.
+#
+# V3.0 Changelog 12-29-21
+# Added
 #  - Notification via ntfy.sh
 #  - Add headless run for crons (-q)
-#  - Add CPU load monitoring 
-# Bugfixes 
+#  - Add CPU load monitoring
+#
+# Bugfixes
 #  - changed lsof based checks to look for LISTEN rather than service name to resolve false alarms
-# 
+#
 # TODO
-# re-test failures to reduce false positives
 # Add restart capabilities
 
 #### CONFIGURATION
 #Set LSOF to your local environment
 lsof="/usr/sbin/lsof"
-ntfysub="Your_ntfy.sh_subscription_name"
+
+#Set your ntfy.sh server and subscription ID
+ntfyserver="ntfy.sh"
+ntfysub="miscdotgeek_notify_XzZx"
+
+#Number of times to retry when a failure is detected. This is an attempt to reduce false positives.
+#If retry is at 1, then an alert is withheld and the script is ran again with the third argument
+#being "0" so that the alert is not withheld.
+
+if [ "$3" == "" ];
+then
+retries="0"
+else
+retries="$3"
+fi
+
+#CPU Thresholds. No two values may be the same. Use decimals if needed (e.g. 2.99)
+#load is okay if it's lower than this. Typically nproc * .75
+okload=3
+
+#load is warning if higher than this but lower than highload. Same as nproc is fine.
+warnload=4
+
+#load is considered to be too high after this point. Don't make this too high or the server
+#load could become so high you won't be able to log in. No higher than nproc * 1.5
+highload=5
+
+
+#------------------------------------------------------
+#                  END CONFIGURATION                  #
+#------------------------------------------------------
+
 
 # Set colors for red/grn/yel text
 red='\e[0;31m'
@@ -34,7 +88,8 @@ grn='\e[0;32m'
 yel='\e[0;93m'
 NC='\e[0m' # No Color
 
-#Force alerts by setting to any value
+
+#Force alerts by setting argument 2 to "test"
 if [ "$2" == "test" ]
         then
                 teststatus="1"
@@ -44,14 +99,14 @@ fi
 
 #define a notification method
 function notifycmd {
-curl --silent -d "$(hostname) $alert" ntfy.sh/$ntfysub >/dev/null
+curl --silent -d "$(hostname) $alert" $ntfyserver/$ntfysub >/dev/null
 }
 
 #configure verbose and quite modes
 if [ "$1" = "-q" ]
         then
-                verbose="true" 
-                printfverbose="true" 
+                verbose="true"
+                printfverbose="true"
         else
                 verbose="echo -e"
                 printfverbose="printf"
@@ -65,12 +120,7 @@ alert=""
 uptime=$(uptime -p | sed 's/^up //')
 
 #check the 15 minute CPU load
-#configured for a 2 core VPS. Adjust values as needed
 check15m (){
-#configure load thresholds for your own server. 
-okload=2.99 #load is okay if it's lower than this
-warnload=2.99 #load is warning if higher than this but lower than highload
-highload=4 #load is considered to be too high after this point
 
 
 cpu15mload=$(top -b -n1 | head -1 | awk '{ print $NF }')
@@ -79,15 +129,15 @@ if (( $(echo "$cpu15mload $okload" | awk '{print ($1 < $2)}') ));
                 cpuload="${grn}${cpu15mload}${NC}"
                         if [ $teststatus == 1 ]
                         then
-                        alert="$alert CPU15-$cpu15mload"
+                        alert="$alert CPU15T-$cpu15mload"
                         fi
         else
                 if (( $(echo "$cpu15mload $highload" | awk '{print ($1 > $2)}') ));
                         then
                         cpuload="${red}${cpu15mload}${NC}"
                         alert="$alert CPU15-$cpu15mload"
-						else
-		                if (( $(echo "$cpu15mload $warnload" | awk '{print ($1 > $2)}') ));				
+                                                else
+                                if (( $(echo "$cpu15mload $warnload" | awk '{print ($1 > $2)}') ));
                                 then
                                         cpuload="${yel}${cpuload}${NC}"
                                 else true
@@ -121,7 +171,7 @@ if [ -f $mountpoint/$touchfile ]
                 fsw=$grn
                 if [ $teststatus == 1 ]
                         then
-                        alert="$alert $partition_RO"
+                        alert="$alert $partition_ROT"
                 fi
         else
                 writeable=" READ ONLY "
@@ -135,7 +185,7 @@ if test ${percentfull} -le 89
                 capco=$grn
                                 if [ $teststatus == 1 ]
                                         then
-                                        alert="$alert $partition CRIT99"
+                                        alert="$alert $partition CRIT99T"
                                 fi
         else
                 if test $percentfull -ge 99
@@ -161,7 +211,7 @@ if test ${inodefull} -le 89
                 inodeco=$grn
                                 if [ $teststatus == 1 ]
                                         then
-                                        alert="$alert $partition INODE99"
+                                        alert="$alert $partition INODE99T"
                                 fi
         else
                 if test $inodefull -ge 99
@@ -197,7 +247,7 @@ if [  $port80 = "LISTEN" ]
                                 status80="${grn}Apache OK${NC}"
                                 if [ $teststatus == 1 ]
                                         then
-                                        alert="$alert APACHE"
+                                        alert="$alert APACHET"
                                 fi
         else
                 status80="${red}WEB SERVER OFFLINE${NC}"
@@ -213,7 +263,7 @@ if [ -z $ebpc ]
         cebpc="${grn}Empty${NC}"
                                                                 if [ $teststatus == 1 ]
                                                                         then
-                                                                        alert="$alert MAILQ"
+                                                                        alert="$alert MAILQT"
                                                                 fi
 
         else
@@ -222,7 +272,7 @@ if [ -z $ebpc ]
                                 cebpc="${grn}${ebpc}${NC}"
                                                                 if [ $teststatus == 1 ]
                                                                         then
-                                                                        alert="$alert MAILQ"
+                                                                        alert="$alert MAILQT"
                                                                 fi
                         else
                         cebpc="${red}${ebpc}${NC}"
@@ -236,7 +286,7 @@ if [ "$($lsof -i:3306 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\
                 cmysql="${grn}MySQL OK${NC}"
                                                                 if [ $teststatus == 1 ]
                                                                 then
-                                                                alert="$alert SQL"
+                                                                alert="$alert SQLT"
                                                                 fi
 
         else
@@ -246,12 +296,12 @@ if [ "$($lsof -i:3306 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\
 fi
 
 #Dovecot check
-if [ "$($lsof -i:110 | awk '{ print $1}' | tail -1)" == "dovecot" ]
+if [ "$($lsof -i:110 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\))" == "LISTEN" ]
         then
                 cdovecot="${grn}Dovecot OK${NC}"
                                                                 if [ $teststatus == 1 ]
                                                                 then
-                                                                alert="$alert DOVECOT"
+                                                                alert="$alert DOVECOTT"
                                                                 fi
 
         else
@@ -266,7 +316,7 @@ if [ "$($lsof -i:25 |  grep LISTEN | tail -1 | awk '{ print $NF }' | tr -d \(\))
                 cpostfix="${grn}Postfix OK${NC}"
                                                                 if [ $teststatus == 1 ]
                                                                 then
-                                                                alert="$alert POSTFIX"
+                                                                alert="$alert POSTFIXT"
                                                                 fi
 
         else
@@ -288,9 +338,29 @@ $verbose "Mail Queue:   "${cebpc}
 $verbose "--------------------------------"
 checkfs
 
-# If there is an alert message, send it. Otherwise do nothing.
-if [ -n "$alert" ]
+# Retry exception for CPU alerts, those are sent immediately regardless of retry count.
+if [[ $alert = *CPU* ]]
 then
-notifycmd
-logger "quickstatus v3 notification sent: $alert"
+    retries=0
 fi
+
+# If there is an alert, and number of retries is greater than 0, retry and decrement the retry number.
+# If retries is 0, send the alert.
+if [ -n "$alert" ]
+        then
+                if [ "$retries" == "0" ]
+                        then
+                                notifycmd
+                                logger "quickstatus v3.1 notification sent: $alert"
+                        else
+                                echo Retrying... retries $retries
+                                retry=$(( $retries - 1 ))
+                                logger "quickstatus v3.1 retry $retry on $alert"
+                                sleep 5
+                                /root/quickdiagr -q 0 $retry
+                fi
+        else
+                logger "quickstatus v3.1 status check completed without error"
+
+fi
+exit 0
