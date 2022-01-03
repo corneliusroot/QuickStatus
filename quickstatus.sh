@@ -52,7 +52,7 @@ lsof="/usr/sbin/lsof"
 
 #Set your ntfy.sh server and subscription ID
 ntfyserver="ntfy.sh"
-ntfysub="miscdotgeek_notify_XzZx"
+ntfysub="Your_Notify_ID"
 
 #Number of times to retry when a failure is detected. This is an attempt to reduce false positives.
 #If retry is at 1, then an alert is withheld and the script is ran again with the third argument
